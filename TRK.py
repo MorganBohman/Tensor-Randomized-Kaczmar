@@ -44,9 +44,6 @@ def tinv(A):
     return np.fft.ifft(A_hat_inv, axis=2).real
 
 
-# ==============================================================================
-# ALGORITHM 1 — Tensor Randomized Kaczmarz (tRK)
-# ==============================================================================
 
 def tRK(A, B, X0, T, weighted=True):
     m = A.shape[0]
