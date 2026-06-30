@@ -36,20 +36,32 @@ def tinv(A):
     return np.fft.ifft(A_hat_inv, axis=2).real
 
 
+def tpinv(A):
+    n1, n2, n3 = A.shape
+    A_hat = np.fft.fft(A, axis=2)
+    A_pinv_hat = np.zeros((n2, n1, n3), dtype=complex)
+    for i in range(n3):
+        A_pinv_hat[:, :, i] = np.linalg.pinv(A_hat[:, :, i])
+    return np.fft.ifft(A_pinv_hat, axis=2).real
 
-def FacTRKB(U, V, Y, X0, T, out_block_size, in_block_size, weighted=True):
-    m_u = U.shape[0]    
-    m_v = V.shape[0]    
-    X   = X0.copy()
-    Z   = np.zeros((*tprod(V, X0).shape[:2], V.shape[2])) 
-    its = [X.copy()]
+
+def FacTRKB(U, V, Y, X0, X_true, X_LN, T, out_block_size, in_block_size,
+            weighted=True):
+   
+    m_u = U.shape[0]
+    m_v = V.shape[0]
+
+    # initialize X and Z to zeros (matching MATLAB)
+    X      = np.zeros_like(X0)
+    Z      = np.zeros((*tprod(V, X0).shape[:2], V.shape[2]))
+    Z_true = tprod(V, X_true)
+    UV     = tprod(U, V)
 
     if out_block_size > m_u:
         raise ValueError(f"out_block_size ({out_block_size}) cannot exceed rows of U ({m_u}).")
     if in_block_size > m_v:
         raise ValueError(f"in_block_size ({in_block_size}) cannot exceed rows of V ({m_v}).")
 
-   
     if weighted:
         u_norms_sq = np.array([np.linalg.norm(U[i,:,:], 'fro')**2 for i in range(m_u)])
         v_norms_sq = np.array([np.linalg.norm(V[i,:,:], 'fro')**2 for i in range(m_v)])
@@ -58,25 +70,44 @@ def FacTRKB(U, V, Y, X0, T, out_block_size, in_block_size, weighted=True):
     else:
         u_probs = v_probs = None
 
+    def compute_metrics(X, Z):
+        ln_est        = X - X_LN
+        errs          = np.linalg.norm((X - X_true).ravel()) / np.linalg.norm(X_true.ravel())
+        res_ln        = np.linalg.norm(tprod(UV, ln_est).ravel())
+        inner_errs    = np.linalg.norm((Z - Z_true).ravel()) / np.linalg.norm(Z_true.ravel())
+        res_inner_ln  = np.linalg.norm(tprod(V, ln_est).ravel())
+        return errs, res_ln, inner_errs, res_inner_ln
+
+
+    e, r, ie, ir     = compute_metrics(X, Z)
+    errs             = [e]
+    res_ln_errs      = [r]
+    inner_errs       = [ie]
+    res_inner_ln_errs= [ir]
+
     for _ in range(T):
-       #outer
-        mu_t    = np.random.choice(m_u, size=out_block_size, replace=False, p=u_probs)
-        U_block = U[mu_t, :, :]                          # (out_block_size, r, p)
-        Y_block = Y[mu_t, :, :]                          # (out_block_size, l, p)
-        U_block_t   = tran(U_block)                      # (r, out_block_size, p)
-        U_prod_inv  = tinv(tprod(U_block, U_block_t))    # (out_block_size, out_block_size, p)
-        resid_y     = tprod(U_block, Z) - Y_block        # (out_block_size, l, p)
+      
+        mu_t       = np.random.choice(m_u, size=out_block_size, replace=False, p=u_probs)
+        U_block    = U[mu_t, :, :]
+        Y_block    = Y[mu_t, :, :]
+        U_block_t  = tran(U_block)
+        U_prod_inv = tinv(tprod(U_block, U_block_t))
+        resid_y    = tprod(U_block, Z) - Y_block
         Z = Z - tprod(U_block_t, tprod(U_prod_inv, resid_y))
 
-        #inner
-        nu_t    = np.random.choice(m_v, size=in_block_size, replace=False, p=v_probs)
-        V_block = V[nu_t, :, :]                          # (in_block_size, n, p)
-        Z_block = Z[nu_t, :, :]                          # (in_block_size, l, p)
-        V_block_t   = tran(V_block)                      # (n, in_block_size, p)
-        V_prod_inv  = tinv(tprod(V_block, V_block_t))    # (in_block_size, in_block_size, p)
-        resid_z     = tprod(V_block, X) - Z_block        # (in_block_size, l, p)
+  
+        nu_t       = np.random.choice(m_v, size=in_block_size, replace=False, p=v_probs)
+        V_block    = V[nu_t, :, :]
+        Z_block    = Z[nu_t, :, :]
+        V_block_t  = tran(V_block)
+        V_prod_inv = tinv(tprod(V_block, V_block_t))
+        resid_z    = tprod(V_block, X) - Z_block
         X = X - tprod(V_block_t, tprod(V_prod_inv, resid_z))
 
-        its.append(X.copy())
+        e, r, ie, ir = compute_metrics(X, Z)
+        errs.append(e)
+        res_ln_errs.append(r)
+        inner_errs.append(ie)
+        res_inner_ln_errs.append(ir)
 
-    return X, its
+    return X, errs, res_ln_errs, inner_errs, res_inner_ln_errs
