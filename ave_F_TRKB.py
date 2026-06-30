@@ -36,13 +36,15 @@ def tpinv(A):
 
 
 def ave_FacTRKB(U, V, Y, X0, X_true, X_LN, T, out_block_size, in_block_size,
-                              alpha_u=1.0, alpha_v=1.0, weighted=True):
-  
+                alpha_u=1.0, alpha_v=1.0, weighted=True):
+   
     m_u = U.shape[0]
     m_v = V.shape[0]
 
-    X = np.zeros_like(X0)
-    Z = np.zeros((*tprod(V, X0).shape[:2], V.shape[2]))
+    X      = np.zeros_like(X0)
+    Z      = np.zeros((*tprod(V, X0).shape[:2], V.shape[2]))
+    Z_true = tprod(V, X_true)
+    UV     = tprod(U, V)
 
     if out_block_size > m_u:
         raise ValueError(f"out_block_size ({out_block_size}) cannot exceed rows of U ({m_u}).")
@@ -57,30 +59,23 @@ def ave_FacTRKB(U, V, Y, X0, X_true, X_LN, T, out_block_size, in_block_size,
     else:
         u_probs = v_probs = None
 
-    UV = tprod(U, V)
+    def compute_metrics(X, Z):
+        ln_est        = X - X_LN
+        errs          = np.linalg.norm((X - X_true).ravel()) / np.linalg.norm(X_true.ravel())
+        res_ln        = np.linalg.norm(tprod(UV, ln_est).ravel())
+        inner_errs    = np.linalg.norm((Z - Z_true).ravel()) / np.linalg.norm(Z_true.ravel())
+        res_inner_ln  = np.linalg.norm(tprod(V, ln_est).ravel())
+        return errs, res_ln, inner_errs, res_inner_ln
 
-    def compute_metrics(X):
-        err        = X - X_true
-        ln_err     = X - X_LN
-        res_err    = tprod(UV, X) - Y
-        res_ln_err = tprod(UV, ln_err)
-        return (
-            np.linalg.norm(err.ravel())     / np.linalg.norm(X_true.ravel()),  # errs
-            np.linalg.norm(res_err.ravel()),                                    # res_errs
-            np.linalg.norm(ln_err.ravel())  / np.linalg.norm(X_LN.ravel()),    # ln_errs
-            np.linalg.norm(res_ln_err.ravel()),                                 # res_ln_errs
-            np.linalg.norm(X.ravel()),                                          # norms
-        )
-
-    e, r, l, rl, n = compute_metrics(X)
-    errs        = [e]
-    res_errs    = [r]
-    ln_errs     = [l]
-    res_ln_errs = [rl]
-    norms       = [n]
+    # record iteration 0
+    e, r, ie, ir      = compute_metrics(X, Z)
+    errs              = [e]
+    res_ln_errs       = [r]
+    inner_errs        = [ie]
+    res_inner_ln_errs = [ir]
 
     for _ in range(T):
-        
+        # outer step: update Z (inverse-free)
         mu_t      = np.random.choice(m_u, size=out_block_size, replace=False, p=u_probs)
         U_block   = U[mu_t, :, :]
         Y_block   = Y[mu_t, :, :]
@@ -89,7 +84,7 @@ def ave_FacTRKB(U, V, Y, X0, X_true, X_LN, T, out_block_size, in_block_size,
         resid_y   = tprod(U_block, Z) - Y_block
         Z = Z - (alpha_u / u_norm_sq) * tprod(U_block_t, resid_y)
 
-       
+        # inner step: update X (inverse-free)
         nu_t      = np.random.choice(m_v, size=in_block_size, replace=False, p=v_probs)
         V_block   = V[nu_t, :, :]
         Z_block   = Z[nu_t, :, :]
@@ -98,12 +93,10 @@ def ave_FacTRKB(U, V, Y, X0, X_true, X_LN, T, out_block_size, in_block_size,
         resid_z   = tprod(V_block, X) - Z_block
         X = X - (alpha_v / v_norm_sq) * tprod(V_block_t, resid_z)
 
-        
-        e, r, l, rl, n = compute_metrics(X)
+        e, r, ie, ir = compute_metrics(X, Z)
         errs.append(e)
-        res_errs.append(r)
-        ln_errs.append(l)
-        res_ln_errs.append(rl)
-        norms.append(n)
+        res_ln_errs.append(r)
+        inner_errs.append(ie)
+        res_inner_ln_errs.append(ir)
 
-    return X, errs, res_errs, ln_errs, res_ln_errs, norms
+    return X, errs, res_ln_errs, inner_errs, res_inner_ln_errs
