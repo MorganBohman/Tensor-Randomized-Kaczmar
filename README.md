@@ -2,6 +2,7 @@ Functions were adapted from Randomized Iterative Methods for Tensor Regression U
 
 Each function fie can be run independently (redefines all needed functions within each file) 
 Testing files rely on the function files involved
+
 Based on: Castillo et al., Randomized Iterative Methods for Tensor Regression Under the t-product (2023)
 
 TRK.py : Algorithim 1 (TRK) 
