@@ -65,7 +65,7 @@ def run_deblur(A, Y_r, X0, X_r, T, block_size, alpha, label):
 
 
 
-data = loadmat('mri_data.mat')
+data = loadmat(r'C:\Users\Admin\OneDrive\Desktop\KACZMAR\mri_data.mat')
 X    = data['X']                          # (128, 128, 12), values in [0,1]
 m, n, p = X.shape
 print(f"  X: {X.shape}  min={X.min():.3f}  max={X.max():.3f}")
@@ -112,8 +112,8 @@ X_ln = recover_img(tprod(tpinv(A), Y_r), m, n, p)
 
 
 fig1, ax = plt.subplots(figsize=(8, 5))
-ax.semilogy(iters_zero,   res_zero,   'b--', linewidth=2, label='zero init  ave_tRKB')
-ax.semilogy(iters_blurry, res_blurry, 'b-',  linewidth=2, label='blurry init  ave_tRKB')
+ax.semilogy(iters_zero,   res_zero,   'b--', linewidth=2, label='zero init AVE_TRKB')
+ax.semilogy(iters_blurry, res_blurry, 'b-',  linewidth=2, label='blurry init Ave_TRKB')
 ax.set_xlabel('Iteration', fontsize=14)
 ax.set_ylabel('Residual Error  ||AX - Y||', fontsize=13)
 ax.legend(fontsize=12)
