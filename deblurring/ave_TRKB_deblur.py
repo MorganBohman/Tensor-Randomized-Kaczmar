@@ -112,7 +112,7 @@ X_ln = recover_img(tprod(tpinv(A), Y_r), m, n, p)
 
 
 fig1, ax = plt.subplots(figsize=(8, 5))
-ax.semilogy(iters_zero,   res_zero,   'b--', linewidth=2, label='zero init AVE_TRKB')
+ax.semilogy(iters_zero,   res_zero,   'b--', linewidth=2, label='zero init Ave_TRKB')
 ax.semilogy(iters_blurry, res_blurry, 'b-',  linewidth=2, label='blurry init Ave_TRKB')
 ax.set_xlabel('Iteration', fontsize=14)
 ax.set_ylabel('Residual Error  ||AX - Y||', fontsize=13)
